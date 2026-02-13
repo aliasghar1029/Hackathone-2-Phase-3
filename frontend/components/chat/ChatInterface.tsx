@@ -1,25 +1,26 @@
-// [Task]: T-021
-// [From]: speckit.plan §2.1
+'use client';
 
-"use client";
-
-import { useState, useEffect, useRef } from "react";
-import { sendChatMessage } from "@/lib/api";
+import { useState, useEffect, useRef } from 'react';
+import { useAuth } from '@/components/auth-provider';
+import { sendChatMessage } from '@/lib/api';
+import { Send, Loader2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface Message {
-  role: "user" | "assistant";
+  role: 'user' | 'assistant';
   content: string;
 }
 
 export function ChatInterface() {
+  const { user, token } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [conversationId, setConversationId] = useState<number | undefined>();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   useEffect(() => {
@@ -27,104 +28,120 @@ export function ChatInterface() {
   }, [messages]);
 
   async function handleSend() {
-    if (!input.trim() || loading) return;
+    if (!input.trim() || loading || !user || !token) return;
 
     const userMessage = input.trim();
-    setInput("");
+    setInput('');
     setLoading(true);
 
-    // Optimistically add user message
-    setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
+    // Add user message immediately
+    setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
 
     try {
-      const response = await sendChatMessage(userMessage, conversationId);
+      const response = await sendChatMessage(
+        user.id,
+        token,
+        userMessage,
+        conversationId
+      );
 
       if (!conversationId) {
         setConversationId(response.conversation_id);
       }
 
-      // Add assistant response
-      setMessages((prev) => [
+      // Add AI response
+      setMessages(prev => [
         ...prev,
-        { role: "assistant", content: response.response },
+        { role: 'assistant', content: response.response }
       ]);
     } catch (error) {
-      console.error("Chat error:", error);
-      setMessages((prev) => [
+      console.error('Chat error:', error);
+      setMessages(prev => [
         ...prev,
-        { role: "assistant", content: "Sorry, I encountered an error. Please try again." },
+        {
+          role: 'assistant',
+          content: 'Sorry, I encountered an error. Please try again.'
+        }
       ]);
     } finally {
       setLoading(false);
     }
   }
 
+  function handleKeyPress(e: React.KeyboardEvent) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  }
+
   return (
-    <div className="flex flex-col h-full bg-gradient-to-br from-purple-900 to-blue-900">
+    <div className="flex flex-col h-[calc(100vh-200px)] max-w-4xl mx-auto">
+      {/* Messages Area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((msg, i) => (
-          <div
-            key={i}
-            className={`flex ${
-              msg.role === "user" ? "justify-end" : "justify-start"
-            }`}
-          >
-            <div
-              className={`max-w-md px-4 py-3 rounded-2xl ${
-                msg.role === "user"
-                  ? "bg-gradient-to-r from-purple-600 to-blue-500 text-white"
-                  : "bg-white/10 backdrop-blur-lg text-white border border-white/20"
-              }`}
+        <AnimatePresence>
+          {messages.map((msg, i) => (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.3 }}
+              className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
-              {msg.content}
-            </div>
-          </div>
-        ))}
-        {loading && (
-          <div className="flex justify-start">
-            <div className="bg-white/10 backdrop-blur-lg text-white px-4 py-3 rounded-2xl border border-white/20">
-              <div className="flex items-center">
-                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Thinking...
+              <div
+                className={`max-w-[70%] px-4 py-3 rounded-2xl ${
+                  msg.role === 'user'
+                    ? 'bg-purple-600 text-white font-medium'
+                    : 'bg-white/10 backdrop-blur-lg text-white border border-white/20'
+                }`}
+              >
+                <p className="whitespace-pre-wrap">{msg.content}</p>
               </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+
+        {loading && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex justify-start"
+          >
+            <div className="bg-white/10 backdrop-blur-lg text-white px-4 py-3 rounded-2xl border border-white/20">
+              <Loader2 className="w-5 h-5 animate-spin" />
             </div>
-          </div>
+          </motion.div>
         )}
+
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="p-4 bg-white/5 backdrop-blur-md border-t border-white/10">
+      {/* Input Area */}
+      <div className="p-4 bg-white/10 backdrop-blur-lg border-t border-white/20">
         <div className="flex gap-2">
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyPress={(e) => e.key === "Enter" && !loading && handleSend()}
-            placeholder="Type a message to add a task, check your tasks, or complete tasks..."
-            className="flex-1 px-4 py-3 rounded-xl bg-white/10 text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-purple-500 border border-white/20"
+            onKeyPress={handleKeyPress}
+            placeholder="Type a message... (e.g., 'Add a task to buy milk')"
+            className="flex-1 px-4 py-3 rounded-full bg-white/20 text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-white/50"
             disabled={loading}
           />
           <button
             onClick={handleSend}
             disabled={loading || !input.trim()}
-            className="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-500 text-white rounded-xl font-semibold hover:from-purple-700 hover:to-blue-600 disabled:opacity-50 transition flex items-center"
+            className="px-6 py-3 bg-white text-purple-600 rounded-full font-semibold hover:bg-white/90 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
           >
-            {loading ? (
-              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-            ) : (
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
-              </svg>
-            )}
-            <span className="ml-1">Send</span>
+            <Send className="w-5 h-5" />
+            Send
           </button>
         </div>
+        
+        <p className="text-white/60 text-xs mt-2 text-center">
+          Try: "Add a task", "Show my tasks", "Mark task 1 as done"
+        </p>
       </div>
     </div>
   );
