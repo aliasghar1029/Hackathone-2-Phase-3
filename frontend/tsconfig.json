@@ -17,10 +17,33 @@
     "isolatedModules": true,
     "jsx": "react-jsx",
     "incremental": true,
-    "baseUrl": ".",
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "@/components/*": [
+        "components/*"
+      ],
+      "@/lib/*": [
+        "lib/*"
+      ],
+      "@/hooks/*": [
+        "hooks/*"
+      ],
+      "@/contexts/*": [
+        "contexts/*"
+      ],
+      "@/utils/*": [
+        "utils/*"
+      ],
+      "@/styles/*": [
+        "styles/*"
+      ],
+      "@/public/*": [
+        "public/*"
+      ],
+      "@/app/*": [
+        "app/*"
       ]
     },
     "plugins": [

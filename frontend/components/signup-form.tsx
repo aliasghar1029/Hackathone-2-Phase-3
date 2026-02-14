@@ -6,7 +6,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
-import { signup } from "@/lib/api";
+import { authApi } from "@/lib/auth-api";
 
 export function SignupForm() {
   const [name, setName] = useState("");
@@ -15,7 +15,7 @@ export function SignupForm() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
-  const { login } = useAuth();
+  const { signup } = useAuth();
 
   const isValid =
     name.trim().length > 0 &&
@@ -31,9 +31,12 @@ export function SignupForm() {
     setError("");
 
     try {
-      const data = await signup(name, email, password);
-      login(data.user, data.token);
-      router.push("/tasks");
+      const result = await signup(name, email, password);
+      if (result.success) {
+        router.push("/tasks");
+      } else {
+        throw new Error(result.error || "Failed to create account");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create account");
     } finally {

@@ -6,7 +6,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
-import { signin } from "@/lib/api";
+import { authApi } from "@/lib/auth-api";
 
 export function SigninForm() {
   const [email, setEmail] = useState("");
@@ -14,7 +14,7 @@ export function SigninForm() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
-  const { login } = useAuth();
+  const { signin } = useAuth();
 
   const isValid =
     email.includes("@") && email.includes(".") && password.length >= 8;
@@ -27,9 +27,12 @@ export function SigninForm() {
     setError("");
 
     try {
-      const data = await signin(email, password);
-      login(data.user, data.token);
-      router.push("/tasks");
+      const result = await signin(email, password);
+      if (result.success) {
+        router.push("/tasks");
+      } else {
+        throw new Error(result.error || "Invalid email or password");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Invalid email or password");
     } finally {

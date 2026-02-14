@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/components/auth-provider';
-import { sendChatMessage } from '@/lib/api';
+import { chatApi } from '@/lib/chat-api';
 import { Send, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -38,22 +38,25 @@ export function ChatInterface() {
     setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
 
     try {
-      const response = await sendChatMessage(
+      const result = await chatApi.sendMessage(
         user.id,
-        token,
         userMessage,
         conversationId
       );
 
-      if (!conversationId) {
-        setConversationId(response.conversation_id);
-      }
+      if (result.data) {
+        if (!conversationId) {
+          setConversationId(result.data.conversation_id);
+        }
 
-      // Add AI response
-      setMessages(prev => [
-        ...prev,
-        { role: 'assistant', content: response.response }
-      ]);
+        // Add AI response
+        setMessages(prev => [
+          ...prev,
+          { role: 'assistant', content: result.data.response }
+        ]);
+      } else {
+        throw new Error(result.error || 'Failed to get response from chat');
+      }
     } catch (error) {
       console.error('Chat error:', error);
       setMessages(prev => [

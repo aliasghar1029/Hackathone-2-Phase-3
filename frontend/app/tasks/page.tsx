@@ -13,11 +13,11 @@ import { TaskList } from "@/components/task-list";
 import { TaskModal } from "@/components/task-modal";
 import { DeleteDialog } from "@/components/delete-dialog";
 import type { Task, TaskFilter } from "@/lib/types";
-import * as api from "@/lib/api";
+import { tasksApi } from "@/lib/tasks-api";
 import Link from "next/link";
 
 function TasksContent() {
-  const { user, token, logout } = useAuth();
+  const { user, logout } = useAuth();
   const router = useRouter();
 
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -32,11 +32,15 @@ function TasksContent() {
   const [deleteTaskId, setDeleteTaskId] = useState<string | null>(null);
 
   const fetchTasks = useCallback(async () => {
-    if (!user || !token) return;
+    if (!user) return;
     setIsLoading(true);
     try {
-      const data = await api.getTasks(user.id, token, filter);
-      setTasks(data);
+      const result = await tasksApi.getTasks(user.id, filter);
+      if (result.data) {
+        setTasks(result.data);
+      } else {
+        throw new Error(result.error || "Failed to load tasks");
+      }
     } catch (err) {
       toast.error("Failed to load tasks", {
         description: err instanceof Error ? err.message : "Please try again",
@@ -48,7 +52,7 @@ function TasksContent() {
     } finally {
       setIsLoading(false);
     }
-  }, [user, token, filter]);
+  }, [user, filter]);
 
   useEffect(() => {
     fetchTasks();
@@ -70,34 +74,53 @@ function TasksContent() {
   }
 
   async function handleSaveTask(title: string, description: string) {
-    if (!user || !token) return;
+    if (!user) return;
 
     if (editingTask) {
-      const updated = await api.updateTask(
+      const result = await tasksApi.updateTask(
         user.id,
-        token,
         editingTask.id,
+        { title, description }
+      );
+      
+      if (result.data) {
+        setTasks((prev) =>
+          prev.map((t) => (t.id === result.data!.id ? result.data! : t))
+        );
+        toast.success("Task updated");
+      } else {
+        toast.error("Failed to update task", {
+          description: result.error || "Please try again"
+        });
+      }
+    } else {
+      const result = await tasksApi.createTask(user.id, {
         title,
         description
-      );
-      setTasks((prev) =>
-        prev.map((t) => (t.id === updated.id ? updated : t))
-      );
-      toast.success("Task updated");
-    } else {
-      const created = await api.createTask(user.id, token, title, description);
-      setTasks((prev) => [created, ...prev]);
-      toast.success("Task created");
+      });
+      
+      if (result.data) {
+        setTasks((prev) => [result.data!, ...prev]);
+        toast.success("Task created");
+      } else {
+        toast.error("Failed to create task", {
+          description: result.error || "Please try again"
+        });
+      }
     }
   }
 
   async function handleToggle(taskId: string) {
-    if (!user || !token) return;
+    if (!user) return;
     try {
-      const updated = await api.toggleComplete(user.id, token, taskId);
-      setTasks((prev) =>
-        prev.map((t) => (t.id === updated.id ? updated : t))
-      );
+      const result = await tasksApi.toggleTaskCompletion(user.id, taskId);
+      if (result.data) {
+        setTasks((prev) =>
+          prev.map((t) => (t.id === result.data!.id ? result.data! : t))
+        );
+      } else {
+        throw new Error(result.error || "Failed to update task");
+      }
     } catch (err) {
       toast.error("Failed to update task", {
         description: err instanceof Error ? err.message : "Please try again",
@@ -106,11 +129,15 @@ function TasksContent() {
   }
 
   async function handleDelete() {
-    if (!user || !token || !deleteTaskId) return;
+    if (!user || !deleteTaskId) return;
     try {
-      await api.deleteTask(user.id, token, deleteTaskId);
-      setTasks((prev) => prev.filter((t) => t.id !== deleteTaskId));
-      toast.success("Task deleted");
+      const result = await tasksApi.deleteTask(user.id, deleteTaskId);
+      if (result.data || !result.error) {
+        setTasks((prev) => prev.filter((t) => t.id !== deleteTaskId));
+        toast.success("Task deleted");
+      } else {
+        throw new Error(result.error || "Failed to delete task");
+      }
     } catch (err) {
       toast.error("Failed to delete task", {
         description: err instanceof Error ? err.message : "Please try again",
