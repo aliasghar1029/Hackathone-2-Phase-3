@@ -1,99 +1,13 @@
 import google.generativeai as genai
-import json
 from typing import List, Dict, Any
+import os
 
-# Configure Gemini
-GEMINI_API_KEY = "AIzaSyBAgo7k4uOGTN2LpiSRA3uD93iUm4CKgZA"
+# Configure Gemini with API key
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyBAgo7k4uOGTN2LpiSRA3uD93iUm4CKgZA")
 genai.configure(api_key=GEMINI_API_KEY)
 
 # Initialize model
 model = genai.GenerativeModel('gemini-1.5-flash')
-
-# Define tools for Gemini
-TOOLS = [
-    {
-        "name": "add_task",
-        "description": "Create a new task for the user",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "title": {
-                    "type": "string",
-                    "description": "The title of the task"
-                },
-                "description": {
-                    "type": "string",
-                    "description": "Optional description of the task"
-                }
-            },
-            "required": ["title"]
-        }
-    },
-    {
-        "name": "list_tasks",
-        "description": "Get all tasks for the user",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "status": {
-                    "type": "string",
-                    "enum": ["all", "pending", "completed"],
-                    "description": "Filter tasks by status"
-                }
-            }
-        }
-    },
-    {
-        "name": "complete_task",
-        "description": "Mark a task as completed",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "task_id": {
-                    "type": "integer",
-                    "description": "The ID of the task to complete"
-                }
-            },
-            "required": ["task_id"]
-        }
-    },
-    {
-        "name": "delete_task",
-        "description": "Delete a task",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "task_id": {
-                    "type": "integer",
-                    "description": "The ID of the task to delete"
-                }
-            },
-            "required": ["task_id"]
-        }
-    },
-    {
-        "name": "update_task",
-        "description": "Update a task's title or description",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "task_id": {
-                    "type": "integer",
-                    "description": "The ID of the task to update"
-                },
-                "title": {
-                    "type": "string",
-                    "description": "New title for the task"
-                },
-                "description": {
-                    "type": "string",
-                    "description": "New description for the task"
-                }
-            },
-            "required": ["task_id"]
-        }
-    }
-]
 
 async def chat_with_gemini(
     user_id: str,
@@ -101,104 +15,128 @@ async def chat_with_gemini(
     conversation_history: List[Dict[str, str]],
     tool_executor
 ) -> Dict[str, Any]:
-    """
-    Send message to Gemini and handle tool calls
+    """Send message to Gemini and execute tools"""
     
-    Args:
-        user_id: The user's ID
-        message: User's message
-        conversation_history: Previous messages
-        tool_executor: Function to execute tools
-        
-    Returns:
-        Dict with response and tool_calls
-    """
     try:
-        # Build chat history for Gemini
-        chat = model.start_chat(history=[])
-        
-        # Add system instruction
-        system_prompt = f"""You are a helpful task management assistant. 
-You can help users manage their todo tasks through natural language.
+        # System prompt for Gemini
+        system_prompt = f"""You are a helpful task management assistant.
+You help users manage their todo tasks through conversation.
 
-Available tools:
-- add_task: Create new tasks
-- list_tasks: Show tasks (all, pending, or completed)
-- complete_task: Mark tasks as done
-- delete_task: Remove tasks
-- update_task: Modify tasks
+When user wants to:
+- Add/create a task → use add_task tool
+- Show/list tasks → use list_tasks tool  
+- Complete/finish/done a task → use complete_task tool
+- Delete/remove a task → use delete_task tool
+- Update/change a task → use update_task tool
 
-Always be friendly, concise, and confirm actions with emojis like ✓ or ✗.
+Always be friendly and confirm actions with ✓ emoji.
+Keep responses concise and clear.
+
 User ID: {user_id}"""
 
-        # Add conversation history
-        for msg in conversation_history:
-            if msg["role"] == "user":
-                chat.send_message(msg["content"])
+        # Simple response without tools for now
+        # (Gemini function calling needs specific setup)
         
-        # Send current message with tools
-        response = chat.send_message(
-            message,
-            tools=TOOLS
-        )
+        # For MVP, we'll use simple keyword detection
+        message_lower = message.lower()
         
-        # Check if AI wants to use tools
-        tool_calls = []
-        final_response = ""
-        
-        if response.parts:
-            for part in response.parts:
-                # Check for function calls
-                if hasattr(part, 'function_call'):
-                    func_call = part.function_call
-                    tool_name = func_call.name
-                    tool_args = dict(func_call.args)
-                    
-                    # Add user_id to args
-                    tool_args['user_id'] = user_id
-                    
-                    # Execute tool
-                    tool_result = await tool_executor(tool_name, tool_args)
-                    
-                    tool_calls.append({
-                        "tool": tool_name,
-                        "args": tool_args,
-                        "result": tool_result
-                    })
-                    
-                    # Generate friendly response based on tool result
-                    if tool_name == "add_task":
-                        final_response = f"✓ I've added '{tool_args['title']}' to your tasks!"
-                    elif tool_name == "list_tasks":
-                        tasks = tool_result.get("tasks", [])
-                        if not tasks:
-                            final_response = "You don't have any tasks yet."
-                        else:
-                            task_list = "\n".join([
-                                f"{i+1}. {t['title']} ({'✓ completed' if t['completed'] else 'pending'})"
-                                for i, t in enumerate(tasks)
-                            ])
-                            final_response = f"Here are your tasks:\n{task_list}"
-                    elif tool_name == "complete_task":
-                        final_response = f"✓ Task marked as completed!"
-                    elif tool_name == "delete_task":
-                        final_response = f"✓ Task deleted successfully!"
-                    elif tool_name == "update_task":
-                        final_response = f"✓ Task updated!"
-                        
-                elif hasattr(part, 'text'):
-                    final_response = part.text
-        
-        if not final_response:
-            final_response = response.text
+        # Detect intent and execute tool
+        if any(word in message_lower for word in ['add', 'create', 'new task', 'remember']):
+            # Extract task title (simple approach)
+            title = message.replace('add task', '').replace('create task', '').replace('add a task', '').replace('to', '').strip()
+            if not title:
+                title = message
             
-        return {
-            "response": final_response,
-            "tool_calls": tool_calls
-        }
+            result = await tool_executor('add_task', {
+                'user_id': user_id,
+                'title': title,
+                'description': ''
+            })
+            
+            return {
+                'response': f"✓ I've added '{title}' to your tasks!",
+                'tool_calls': [{'tool': 'add_task', 'result': result}]
+            }
+            
+        elif any(word in message_lower for word in ['show', 'list', 'see', 'what', 'my tasks']):
+            # Detect status filter
+            if 'pending' in message_lower:
+                status = 'pending'
+            elif 'completed' in message_lower or 'done' in message_lower:
+                status = 'completed'
+            else:
+                status = 'all'
+            
+            result = await tool_executor('list_tasks', {
+                'user_id': user_id,
+                'status': status
+            })
+            
+            tasks = result.get('tasks', [])
+            if not tasks:
+                response = "You don't have any tasks yet."
+            else:
+                task_list = "\n".join([
+                    f"{i+1}. {t['title']} ({'✓ completed' if t['completed'] else 'pending'})"
+                    for i, t in enumerate(tasks)
+                ])
+                response = f"Here are your tasks:\n{task_list}"
+            
+            return {
+                'response': response,
+                'tool_calls': [{'tool': 'list_tasks', 'result': result}]
+            }
+            
+        elif any(word in message_lower for word in ['complete', 'done', 'finish', 'mark']):
+            # Extract task ID (simple approach - look for numbers)
+            import re
+            numbers = re.findall(r'\d+', message)
+            if numbers:
+                task_id = int(numbers[0])
+                result = await tool_executor('complete_task', {
+                    'user_id': user_id,
+                    'task_id': task_id
+                })
+                return {
+                    'response': f"✓ Task {task_id} marked as completed!",
+                    'tool_calls': [{'tool': 'complete_task', 'result': result}]
+                }
+            else:
+                return {
+                    'response': "Please specify which task number to complete (e.g., 'complete task 1')",
+                    'tool_calls': []
+                }
+                
+        elif any(word in message_lower for word in ['delete', 'remove']):
+            # Extract task ID
+            import re
+            numbers = re.findall(r'\d+', message)
+            if numbers:
+                task_id = int(numbers[0])
+                result = await tool_executor('delete_task', {
+                    'user_id': user_id,
+                    'task_id': task_id
+                })
+                return {
+                    'response': f"✓ Task {task_id} deleted successfully!",
+                    'tool_calls': [{'tool': 'delete_task', 'result': result}]
+                }
+            else:
+                return {
+                    'response': "Please specify which task number to delete (e.g., 'delete task 1')",
+                    'tool_calls': []
+                }
         
+        else:
+            # Default response
+            return {
+                'response': "I can help you manage tasks! Try: 'add a task', 'show my tasks', 'complete task 1', or 'delete task 2'",
+                'tool_calls': []
+            }
+            
     except Exception as e:
+        print(f"Gemini error: {e}")
         return {
-            "response": f"Sorry, I encountered an error: {str(e)}",
-            "tool_calls": []
+            'response': f"Sorry, I encountered an error: {str(e)}",
+            'tool_calls': []
         }

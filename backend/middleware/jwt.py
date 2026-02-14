@@ -2,8 +2,8 @@ from fastapi import HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional
 from jose import JWTError
-from services.auth import verify_token
-from models import User
+from Backend.services.auth import verify_token
+from Backend.models import User
 
 security = HTTPBearer()
 

@@ -2,10 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session
 from typing import Optional, List, Dict, Any
-from backend.db import get_session
-from backend.services import chat_service, gemini_service
-from backend.services import tasks as task_service
-from backend.middleware.jwt import verify_user_id
+from Backend.db import get_sync_session
+from Backend.services import chat_service, gemini_service
+from Backend.services import tasks as task_service
+from Backend.middleware.jwt import get_current_user
 
 router = APIRouter(prefix="/api/{user_id}/chat", tags=["chat"])
 
@@ -19,7 +19,7 @@ class ChatResponse(BaseModel):
     tool_calls: List[Dict[str, Any]]
 
 async def execute_tool(tool_name: str, args: Dict[str, Any], session: Session):
-    """Execute MCP tools"""
+    """Execute tools"""
     user_id = args.get('user_id')
     
     if tool_name == "add_task":
@@ -80,32 +80,23 @@ async def execute_tool(tool_name: str, args: Dict[str, Any], session: Session):
             "status": "deleted"
         }
     
-    elif tool_name == "update_task":
-        task = task_service.update_task(
-            session,
-            user_id,
-            args['task_id'],
-            args.get('title'),
-            args.get('description')
-        )
-        if not task:
-            return {"error": "Task not found"}
-        return {
-            "task_id": task.id,
-            "status": "updated",
-            "title": task.title
-        }
-    
     return {"error": "Unknown tool"}
 
 @router.post("", response_model=ChatResponse)
 async def send_message(
     user_id: str,
     data: ChatRequest,
-    session: Session = Depends(get_session),
-    _: str = Depends(verify_user_id)
+    session: Session = Depends(get_sync_session),
+    token_user_id: str = Depends(get_current_user)
 ):
     """Send a message to the AI chatbot"""
+    # Validate that URL user_id matches token user_id
+    if user_id != token_user_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied: You can only access your own conversations"
+        )
+    
     try:
         # Get or create conversation
         conversation = chat_service.get_or_create_conversation(
@@ -129,7 +120,7 @@ async def send_message(
             data.message
         )
         
-        # Create tool executor with session
+        # Create tool executor
         async def tool_executor(tool_name: str, args: Dict[str, Any]):
             return await execute_tool(tool_name, args, session)
         
@@ -153,8 +144,9 @@ async def send_message(
         return ChatResponse(
             conversation_id=conversation.id,
             response=result["response"],
-            tool_calls=result["tool_calls"]
+            tool_calls=result.get("tool_calls", [])
         )
         
     except Exception as e:
+        print(f"Chat error: {e}")
         raise HTTPException(500, f"Chat error: {str(e)}")

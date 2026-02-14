@@ -3,9 +3,9 @@ from sqlmodel import select
 from typing import Dict
 from datetime import timedelta
 from sqlmodel.ext.asyncio.session import AsyncSession
-from db import get_session
-from models import User, UserCreate, UserLogin, UserResponse
-from services.auth import get_password_hash, authenticate_user, create_access_token
+from Backend.db import get_session
+from Backend.models import User, UserCreate, UserLogin, UserResponse
+from Backend.services.auth import get_password_hash, authenticate_user, create_access_token
 
 router = APIRouter(tags=["authentication"])
 

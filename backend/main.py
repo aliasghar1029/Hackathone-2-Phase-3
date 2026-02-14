@@ -2,8 +2,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import SQLModel
-from db import engine
-from routes import auth, tasks, chat
+from Backend.db import engine
+from Backend.routes import auth, tasks, chat
 import logging
 
 # Set up basic logging
@@ -16,7 +16,7 @@ async def lifespan(app: FastAPI):
     """Lifespan event handler to initialize the database on startup."""
     logger.info("Initializing database...")
     # Create all tables if they don't exist
-    from models import User, Task, Conversation, Message  # Import here to ensure models are registered
+    from Backend.models import User, Task, Conversation, Message  # Import here to ensure models are registered
     async with engine.begin() as conn:
         # Try to create tables, ignoring if they already exist
         try:

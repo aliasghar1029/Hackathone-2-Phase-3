@@ -3,10 +3,10 @@ from sqlmodel import select
 from typing import List
 from datetime import datetime
 from sqlmodel.ext.asyncio.session import AsyncSession
-from db import get_session
-from models import Task, TaskCreate, TaskUpdate, TaskRead, User
-from middleware.jwt import get_current_user, validate_user_id_match
-from services.tasks import (
+from Backend.db import get_session
+from Backend.models import Task, TaskCreate, TaskUpdate, TaskRead, User
+from Backend.middleware.jwt import get_current_user, validate_user_id_match
+from Backend.services.tasks import (
     get_tasks_by_user_id,
     create_task,
     update_task,

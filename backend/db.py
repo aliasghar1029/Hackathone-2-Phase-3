@@ -1,9 +1,10 @@
 from sqlmodel import create_engine
 from sqlalchemy.pool import QueuePool
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Generator
 from contextlib import asynccontextmanager
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlmodel import Session
 import os
 from dotenv import load_dotenv
 
@@ -14,6 +15,10 @@ DATABASE_URL = os.getenv(
     "DATABASE_URL",
     "sqlite:///./test.db"  # Use SQLite for local testing
 )
+
+# Initialize engines globally
+engine = None
+sync_engine = None
 
 # Create async engine with appropriate configuration
 if DATABASE_URL.startswith("postgresql"):
@@ -27,7 +32,7 @@ if DATABASE_URL.startswith("postgresql"):
             if "=" in param:
                 key, value = param.split("=", 1)
                 original_params[key] = value
-        
+
         # Map common SSL parameters to asyncpg-compatible ones
         mapped_params = {}
         for key, value in original_params.items():
@@ -37,7 +42,7 @@ if DATABASE_URL.startswith("postgresql"):
                 continue  # Skip adding to URL, handle via connect_args
             elif key != 'channel_binding':  # Skip incompatible parameters
                 mapped_params[key] = value
-        
+
         # Reconstruct URL with compatible parameters
         params_part = "&".join([f"{k}={v}" for k, v in mapped_params.items()])
         DATABASE_URL = base_url.replace("postgresql://", "postgresql+asyncpg://", 1)
@@ -63,6 +68,18 @@ if DATABASE_URL.startswith("postgresql"):
             }
         } if DATABASE_URL.startswith("postgresql+asyncpg") else {}
     )
+    
+    # Create sync engine for sync operations
+    sync_database_url = DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://", 1)
+    sync_engine = create_engine(
+        sync_database_url,
+        poolclass=QueuePool,
+        pool_size=5,
+        max_overflow=10,
+        pool_pre_ping=True,
+        pool_recycle=300,
+        echo=False,
+    )
 else:
     # Create async engine for SQLite - use aiosqlite for async support
     engine = create_async_engine(
@@ -72,8 +89,22 @@ else:
             "check_same_thread": False  # Needed for SQLite
         }
     )
+    
+    # Create sync engine for sync operations
+    sync_engine = create_engine(
+        DATABASE_URL,
+        echo=False,
+        connect_args={
+            "check_same_thread": False  # Needed for SQLite
+        }
+    )
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
     async with AsyncSession(engine) as session:
+        yield session
+
+
+def get_sync_session() -> Generator[Session, None, None]:
+    with Session(sync_engine) as session:
         yield session

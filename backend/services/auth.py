@@ -4,7 +4,7 @@ import os
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 from dotenv import load_dotenv
-from models import User
+from Backend.models import User
 
 load_dotenv()
 
