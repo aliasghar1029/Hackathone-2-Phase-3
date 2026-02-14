@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/components/auth-provider';
 import { tasksApi, TaskCreate } from '@/lib/tasks-api';
 import { chatApi } from '@/lib/chat-api';
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 
 const ApiExample: React.FC = () => {
-  const { user, isAuthenticated } = useAuth();
+  const { user, token } = useAuth();
+  const isAuthenticated = !!token;
   const [taskTitle, setTaskTitle] = useState('');
   const [taskDescription, setTaskDescription] = useState('');
   const [chatMessage, setChatMessage] = useState('');

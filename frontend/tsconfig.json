@@ -22,28 +22,28 @@
         "./*"
       ],
       "@/components/*": [
-        "components/*"
+        "./components/*"
       ],
       "@/lib/*": [
-        "lib/*"
+        "./lib/*"
       ],
       "@/hooks/*": [
-        "hooks/*"
+        "./hooks/*"
       ],
       "@/contexts/*": [
-        "contexts/*"
+        "./contexts/*"
       ],
       "@/utils/*": [
-        "utils/*"
+        "./utils/*"
       ],
       "@/styles/*": [
-        "styles/*"
+        "./styles/*"
       ],
       "@/public/*": [
-        "public/*"
+        "./public/*"
       ],
       "@/app/*": [
-        "app/*"
+        "./app/*"
       ]
     },
     "plugins": [
