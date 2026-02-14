@@ -1,110 +1,34 @@
-from sqlmodel import create_engine
-from sqlalchemy.pool import QueuePool
-from typing import AsyncGenerator, Generator
-from contextlib import asynccontextmanager
-from sqlmodel.ext.asyncio.session import AsyncSession
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlmodel import Session
+from sqlmodel import create_engine, Session, SQLModel
 import os
-from dotenv import load_dotenv
 
-load_dotenv()
+# Get database URL from environment
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-# Use SQLite for local development, PostgreSQL for production
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "sqlite:///./test.db"  # Use SQLite for local testing
+if not DATABASE_URL:
+    raise ValueError("DATABASE_URL environment variable is not set")
+
+# IMPORTANT: Using SYNC engine (NOT async)
+engine = create_engine(
+    DATABASE_URL,
+    echo=True,
+    pool_size=5,
+    max_overflow=10,
+    pool_pre_ping=True
 )
 
-# Initialize engines globally
-engine = None
-sync_engine = None
+def init_db():
+    """Create all database tables"""
+    try:
+        SQLModel.metadata.create_all(engine)
+        print("✓ Database tables created successfully")
+    except Exception as e:
+        print(f"✗ Database initialization error: {e}")
+        raise
 
-# Create async engine with appropriate configuration
-if DATABASE_URL.startswith("postgresql"):
-    # Replace postgresql:// with postgresql+asyncpg:// for async support
-    # Need to handle query parameters properly for asyncpg
-    if "?" in DATABASE_URL:
-        base_url, params_str = DATABASE_URL.split("?", 1)
-        # Parse query parameters
-        original_params = {}
-        for param in params_str.split("&"):
-            if "=" in param:
-                key, value = param.split("=", 1)
-                original_params[key] = value
-
-        # Map common SSL parameters to asyncpg-compatible ones
-        mapped_params = {}
-        for key, value in original_params.items():
-            if key == 'sslmode':
-                # asyncpg uses ssl parameter instead of sslmode in URL
-                # We'll handle this via connect_args instead
-                continue  # Skip adding to URL, handle via connect_args
-            elif key != 'channel_binding':  # Skip incompatible parameters
-                mapped_params[key] = value
-
-        # Reconstruct URL with compatible parameters
-        params_part = "&".join([f"{k}={v}" for k, v in mapped_params.items()])
-        DATABASE_URL = base_url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        if params_part:
-            DATABASE_URL += "?" + params_part
-
-    else:
-        DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
-
-    # Create async engine with SSL configuration for PostgreSQL
-    engine = create_async_engine(
-        DATABASE_URL,
-        poolclass=QueuePool,
-        pool_size=5,
-        max_overflow=10,
-        pool_pre_ping=True,
-        pool_recycle=300,
-        echo=False,  # Set to True for debugging SQL queries
-        # Handle SSL via connect_args for asyncpg
-        connect_args={
-            "server_settings": {
-                "application_name": "hackathon_app",
-            }
-        } if DATABASE_URL.startswith("postgresql+asyncpg") else {}
-    )
-    
-    # Create sync engine for sync operations
-    sync_database_url = DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://", 1)
-    sync_engine = create_engine(
-        sync_database_url,
-        poolclass=QueuePool,
-        pool_size=5,
-        max_overflow=10,
-        pool_pre_ping=True,
-        pool_recycle=300,
-        echo=False,
-    )
-else:
-    # Create async engine for SQLite - use aiosqlite for async support
-    engine = create_async_engine(
-        DATABASE_URL.replace("sqlite:///", "sqlite+aiosqlite:///"),
-        echo=False,  # Set to True for debugging SQL queries
-        connect_args={
-            "check_same_thread": False  # Needed for SQLite
-        }
-    )
-    
-    # Create sync engine for sync operations
-    sync_engine = create_engine(
-        DATABASE_URL,
-        echo=False,
-        connect_args={
-            "check_same_thread": False  # Needed for SQLite
-        }
-    )
-
-
-async def get_session() -> AsyncGenerator[AsyncSession, None]:
-    async with AsyncSession(engine) as session:
-        yield session
-
-
-def get_sync_session() -> Generator[Session, None, None]:
-    with Session(sync_engine) as session:
-        yield session
+def get_session():
+    """FastAPI dependency for database session"""
+    with Session(engine) as session:
+        yield session  
+def get_sync_session():  
+    with Session(engine) as session:  
+        yield session  

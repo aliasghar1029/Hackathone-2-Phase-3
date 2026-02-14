@@ -1,7 +1,7 @@
 from sqlmodel import Session, select
 from typing import List, Optional
 from datetime import datetime
-from Backend.models import Task, TaskCreate, TaskUpdate, User
+from models import Task, TaskCreate, TaskUpdate, User
 
 
 def get_tasks_by_user_id(session: Session, user_id: str, status: Optional[str] = None) -> List[Task]:

@@ -1,5 +1,5 @@
 from sqlmodel import Session, select
-from Backend.models import Conversation, Message
+from models import Conversation, Message
 from typing import List, Dict, Optional
 from datetime import datetime
 

@@ -2,11 +2,11 @@ from fastapi import APIRouter, HTTPException, status, Depends
 from sqlmodel import select
 from typing import List
 from datetime import datetime
-from sqlmodel.ext.asyncio.session import AsyncSession
-from Backend.db import get_session
-from Backend.models import Task, TaskCreate, TaskUpdate, TaskRead, User
-from Backend.middleware.jwt import get_current_user, validate_user_id_match
-from Backend.services.tasks import (
+from sqlmodel import Session
+from db import get_session
+from models import Task, TaskCreate, TaskUpdate, TaskRead, User
+from middleware.jwt import get_current_user, validate_user_id_match
+from services.tasks import (
     get_tasks_by_user_id,
     create_task,
     update_task,
@@ -18,11 +18,11 @@ router = APIRouter(tags=["tasks"])
 
 
 @router.get("/{user_id}/tasks", response_model=List[TaskRead])
-async def get_tasks(
+def get_tasks(
     user_id: str,
     status_param: str = "all",
     token_user_id: str = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session)
+    session: Session = Depends(get_session)
 ):
     """
     Get all tasks for a user, optionally filtered by status.
@@ -36,8 +36,8 @@ async def get_tasks(
         )
 
     try:
-        # Using the async service functions
-        result = await session.execute(
+        # Using the sync service functions
+        result = session.execute(
             select(Task).where(Task.user_id == user_id)
         )
         tasks = result.scalars().all()
@@ -65,11 +65,11 @@ async def get_tasks(
 
 
 @router.post("/{user_id}/tasks", response_model=TaskRead, status_code=status.HTTP_201_CREATED)
-async def create_new_task(
+def create_new_task(
     user_id: str,
     task_data: TaskCreate,
     token_user_id: str = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session)
+    session: Session = Depends(get_session)
 ):
     """
     Create a new task for the authenticated user.
@@ -90,8 +90,8 @@ async def create_new_task(
         )
 
         session.add(db_task)
-        await session.commit()
-        await session.refresh(db_task)
+        session.commit()
+        session.refresh(db_task)
 
         # Convert datetime objects to ISO format strings for JSON serialization
         task_dict = db_task.model_dump()
@@ -107,12 +107,12 @@ async def create_new_task(
 
 
 @router.put("/{user_id}/tasks/{task_id}", response_model=TaskRead)
-async def update_existing_task(
+def update_existing_task(
     user_id: str,
     task_id: int,
     task_update: TaskUpdate,
     token_user_id: str = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session)
+    session: Session = Depends(get_session)
 ):
     """
     Update an existing task.
@@ -127,7 +127,7 @@ async def update_existing_task(
 
     try:
         # Get the task
-        result = await session.execute(
+        result = session.execute(
             select(Task).where(Task.id == task_id).where(Task.user_id == user_id)
         )
         db_task = result.scalar_one_or_none()
@@ -143,8 +143,8 @@ async def update_existing_task(
         for field, value in update_data.items():
             setattr(db_task, field, value)
 
-        await session.commit()
-        await session.refresh(db_task)
+        session.commit()
+        session.refresh(db_task)
 
         # Convert datetime objects to ISO format strings for JSON serialization
         task_dict = db_task.model_dump()
@@ -165,11 +165,11 @@ async def update_existing_task(
 
 
 @router.delete("/{user_id}/tasks/{task_id}")
-async def delete_existing_task(
+def delete_existing_task(
     user_id: str,
     task_id: int,
     token_user_id: str = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session)
+    session: Session = Depends(get_session)
 ):
     """
     Delete an existing task.
@@ -183,7 +183,7 @@ async def delete_existing_task(
         )
 
     # Get the task
-    result = await session.execute(
+    result = session.execute(
         select(Task).where(Task.id == task_id).where(Task.user_id == user_id)
     )
     db_task = result.scalar_one_or_none()
@@ -194,18 +194,18 @@ async def delete_existing_task(
             detail="Task not found"
         )
 
-    await session.delete(db_task)
-    await session.commit()
+    session.delete(db_task)
+    session.commit()
 
     return {"success": True}
 
 
 @router.patch("/{user_id}/tasks/{task_id}/complete", response_model=TaskRead)
-async def toggle_task_complete(
+def toggle_task_complete(
     user_id: str,
     task_id: int,
     token_user_id: str = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session)
+    session: Session = Depends(get_session)
 ):
     """
     Toggle the completion status of a task.
@@ -219,7 +219,7 @@ async def toggle_task_complete(
         )
 
     # Get the task
-    result = await session.execute(
+    result = session.execute(
         select(Task).where(Task.id == task_id).where(Task.user_id == user_id)
     )
     db_task = result.scalar_one_or_none()
@@ -232,8 +232,8 @@ async def toggle_task_complete(
 
     # Toggle completion status
     db_task.completed = not db_task.completed
-    await session.commit()
-    await session.refresh(db_task)
+    session.commit()
+    session.refresh(db_task)
 
     # Convert datetime objects to ISO format strings for JSON serialization
     task_dict = db_task.model_dump()

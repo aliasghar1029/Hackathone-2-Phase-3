@@ -2,10 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session
 from typing import Optional, List, Dict, Any
-from Backend.db import get_sync_session
-from Backend.services import chat_service, gemini_service
-from Backend.services import tasks as task_service
-from Backend.middleware.jwt import get_current_user
+from db import get_session
+from services import chat_service, gemini_service
+from services import tasks as task_service
+from middleware.jwt import get_current_user
 
 router = APIRouter(prefix="/api/{user_id}/chat", tags=["chat"])
 
@@ -18,10 +18,10 @@ class ChatResponse(BaseModel):
     response: str
     tool_calls: List[Dict[str, Any]]
 
-async def execute_tool(tool_name: str, args: Dict[str, Any], session: Session):
+def execute_tool(tool_name: str, args: Dict[str, Any], session: Session):
     """Execute tools"""
     user_id = args.get('user_id')
-    
+
     if tool_name == "add_task":
         task = task_service.create_task(
             session,
@@ -34,7 +34,7 @@ async def execute_tool(tool_name: str, args: Dict[str, Any], session: Session):
             "status": "created",
             "title": task.title
         }
-    
+
     elif tool_name == "list_tasks":
         tasks = task_service.get_tasks(
             session,
@@ -52,7 +52,7 @@ async def execute_tool(tool_name: str, args: Dict[str, Any], session: Session):
                 for t in tasks
             ]
         }
-    
+
     elif tool_name == "complete_task":
         task = task_service.toggle_complete(
             session,
@@ -66,7 +66,7 @@ async def execute_tool(tool_name: str, args: Dict[str, Any], session: Session):
             "status": "completed",
             "title": task.title
         }
-    
+
     elif tool_name == "delete_task":
         success = task_service.delete_task(
             session,
@@ -79,14 +79,14 @@ async def execute_tool(tool_name: str, args: Dict[str, Any], session: Session):
             "task_id": args['task_id'],
             "status": "deleted"
         }
-    
+
     return {"error": "Unknown tool"}
 
 @router.post("", response_model=ChatResponse)
-async def send_message(
+def send_message(
     user_id: str,
     data: ChatRequest,
-    session: Session = Depends(get_sync_session),
+    session: Session = Depends(get_session),
     token_user_id: str = Depends(get_current_user)
 ):
     """Send a message to the AI chatbot"""
@@ -96,7 +96,7 @@ async def send_message(
             status_code=403,
             detail="Access denied: You can only access your own conversations"
         )
-    
+
     try:
         # Get or create conversation
         conversation = chat_service.get_or_create_conversation(
@@ -104,13 +104,13 @@ async def send_message(
             user_id,
             data.conversation_id
         )
-        
+
         # Load conversation history
         history = chat_service.load_conversation_history(
             session,
             conversation.id
         )
-        
+
         # Save user message
         chat_service.save_message(
             session,
@@ -119,19 +119,19 @@ async def send_message(
             "user",
             data.message
         )
-        
+
         # Create tool executor
-        async def tool_executor(tool_name: str, args: Dict[str, Any]):
-            return await execute_tool(tool_name, args, session)
-        
+        def tool_executor(tool_name: str, args: Dict[str, Any]):
+            return execute_tool(tool_name, args, session)
+
         # Get AI response
-        result = await gemini_service.chat_with_gemini(
+        result = gemini_service.chat_with_gemini(
             user_id,
             data.message,
             history,
             tool_executor
         )
-        
+
         # Save AI response
         chat_service.save_message(
             session,
@@ -140,13 +140,13 @@ async def send_message(
             "assistant",
             result["response"]
         )
-        
+
         return ChatResponse(
             conversation_id=conversation.id,
             response=result["response"],
             tool_calls=result.get("tool_calls", [])
         )
-        
+
     except Exception as e:
         print(f"Chat error: {e}")
         raise HTTPException(500, f"Chat error: {str(e)}")
